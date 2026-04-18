@@ -1,0 +1,28 @@
+# --- Python Environment ---
+venv/
+.env
+__pycache__/
+*.py[cod]
+
+# --- API Keys & Credentials ---
+.api_key
+credentials.json
+
+# --- Temporary Media (Lie Detector Files) ---
+temp_audio.wav
+*.mp4
+*.avi
+*.jpg
+*.png
+
+# --- AI Model Weights (DeepFace) ---
+.deepface/
+weights/
+*.h5
+*.pb
+
+# --- IDE & System ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
