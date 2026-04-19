@@ -48,20 +48,42 @@
     // SIMULATION: Click the lock
     document.getElementById('lock-icon').onclick = triggerWarp;
 
-    // HARDWARE: Arduino WebSocket
-    const socket = new WebSocket(`ws://${window.location.host}/ws/button`);
+    // HARDWARE: Arduino WebSocket with auto-reconnect
+    // Every time the server restarts the socket dies — this keeps it alive.
+    function connectSocket() {
+        const socket = new WebSocket(`ws://${window.location.host}/ws/button`);
 
-    socket.onmessage = function(event) {
-        console.log("Hardware signal:", event.data);
-        if (event.data === "pressed") {
-            triggerWarp();
-        } else if (event.data === "reset_to_portal") {
-            document.getElementById('status-text').innerText = "System Locked. Awaiting authorization...";
-            document.getElementById('lock-icon').innerText = "🔒";
-            document.getElementById('portal-container').classList.remove('portal-zoom');
-            document.getElementById('portal-container').style.opacity = "1";
-        }
-    };
+        socket.onopen = () => {
+            console.log("WebSocket connected.");
+            document.getElementById('status-text').innerText = "Awaiting physical authorization to enter...";
+        };
+
+        socket.onmessage = function(event) {
+            console.log("Hardware signal:", event.data);
+            if (event.data === "pressed") {
+                triggerWarp();
+            } else if (event.data === "reset_to_portal") {
+                document.getElementById('status-text').innerText = "System Locked. Awaiting authorization...";
+                document.getElementById('lock-icon').innerText = "🔒";
+                document.getElementById('portal-container').classList.remove('portal-zoom');
+                document.getElementById('portal-container').style.opacity = "1";
+            }
+        };
+
+        socket.onclose = () => {
+            // Socket dropped (e.g. server restarted) — retry in 2 seconds
+            console.warn("WebSocket closed. Reconnecting in 2s...");
+            document.getElementById('status-text').innerText = "Connection lost. Reconnecting...";
+            setTimeout(connectSocket, 2000);
+        };
+
+        socket.onerror = (err) => {
+            console.error("WebSocket error:", err);
+            socket.close(); // triggers onclose → reconnect
+        };
+    }
+
+    connectSocket();
     </script>
 </body>
 </html>
