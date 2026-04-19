@@ -6,7 +6,7 @@
 
 ## 🔐 Overview
 
-**The Secret Journal** is a multi-modal biometric security system built around a physical 3D-printed vault. Access to the diary inside is granted only after the system confirms your identity using both **facial recognition** and **voice verification** simultaneously. Once you're in, a locally-running AI generates a personalized reflection prompt — crafted specifically around your life, your studies, and your interests.
+**The Secret Journal** is a multi-modal biometric security system built around a physical 3D-printed vault. Access to the diary inside is granted only after the system confirms your identity using both **facial recognition** and **voice verification** simultaneously. Once you're in, a locally-running AI generates a personalized reflection prompt, crafted specifically around your life, your studies, and your interests.
 
 The system bridges the physical and digital worlds: a button press on the vault triggers a browser animation via WebSocket, and a successful biometric login drives a stepper motor to physically slide the lock open.
 
@@ -53,7 +53,9 @@ The system bridges the physical and digital worlds: a button press on the vault 
 |---|---|
 | Arduino Nano | Microcontroller — reads button input, drives motor, receives unlock commands |
 | Stepper Motor | Mechanical force to slide the locking bolt open/closed |
-| Potentiometer | Fine-tunes motor positioning sensitivity |
+| LED | Display Red for Denied and Green for Access Granted |
+| LCD Display | Displays state of vault - Locked vs. Unlocked |
+| UART | Arduino send button unlocking and locking signals to web application
 | [Fusion 360](https://www.autodesk.com/products/fusion-360/) | CAD design of the 3D-printed vault enclosure |
 
 ---
