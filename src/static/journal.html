@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Today's Journal Prompt</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; 
+            background: #1a1a1a; 
+            color: white; 
+            padding: 50px; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 80vh;
+        }
+        #prompt-container { 
+            background: #2a2a2a; 
+            border-radius: 15px; 
+            padding: 40px; 
+            border-left: 8px solid #00e6e6; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 { color: #00e6e6; margin-bottom: 10px; font-size: 2.5em; }
+        h3 { color: #888; text-transform: uppercase; letter-spacing: 2px; }
+        #gemini-prompt { 
+            font-size: 1.8em; 
+            line-height: 1.6; 
+            font-style: italic;
+            margin-top: 20px;
+        }
+        .instruction { margin-top: 40px; color: #666; font-size: 1.1em; }
+    </style>
+</head>
+<body>
+    <h3>Daily Inspiration</h3>
+    <div id="prompt-container">
+        <p id="gemini-prompt">Generating your personalized prompt...</p>
+    </div>
+    <p class="instruction">Please write your response in your physical journal.</p>
+
+    <script>
+    async function fetchPrompt() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const userName = urlParams.get('name') || "User";
+
+        try {
+            const resp = await fetch(`/generate-prompt?name=${encodeURIComponent(userName)}`);
+            const data = await resp.json();
+            document.getElementById('gemini-prompt').innerText = data.prompt;
+        } catch (err) {
+            document.getElementById('gemini-prompt').innerText = "Could not load prompt. Take a moment to reflect on your day.";
+        }
+    }
+    fetchPrompt();
+    </script>
+</body>
+</html>
