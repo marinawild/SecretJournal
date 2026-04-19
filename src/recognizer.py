@@ -1,8 +1,4 @@
 # ── recognizer.py ─────────────────────────────────────────────────────────────
-"""
-Face + voice verification against enrolled identities.
-Loads all enrollments at startup and identifies the closest match.
-"""
 
 import os
 import json
@@ -20,12 +16,7 @@ from config import (
 encoder = VoiceEncoder()
 
 
-# ── Load enrollments ──────────────────────────────────────────────────────────
 def load_enrollments() -> list[dict]:
-    """
-    Scan ENROLLMENT_DIR and return a list of enrollment records:
-        { name, face_paths, voice_embedding }
-    """
     if not os.path.isdir(ENROLLMENT_DIR):
         return []
 
@@ -51,13 +42,7 @@ def load_enrollments() -> list[dict]:
     return records
 
 
-# ── Face verification ─────────────────────────────────────────────────────────
 def verify_face(live_frame, enrollments: list[dict]) -> dict:
-    """
-    Compare live_frame against every enrolled face.
-    Returns the best match result dict:
-        { verified, name, distance, threshold }
-    """
     best = {"verified": False, "name": None,
             "distance": 1.0,   "threshold": FACE_DISTANCE_THRESHOLD}
 
@@ -75,6 +60,7 @@ def verify_face(live_frame, enrollments: list[dict]) -> dict:
                     silent=True,
                 )
                 dist = result["distance"]
+                print(f"  [face debug] vs {record['name']}: dist={dist:.4f}")
                 if dist < best["distance"]:
                     best["distance"] = dist
                     best["name"]     = record["name"]
@@ -86,21 +72,14 @@ def verify_face(live_frame, enrollments: list[dict]) -> dict:
     return best
 
 
-# ── Voice verification ────────────────────────────────────────────────────────
 def verify_voice(audio_path: str, enrollments: list[dict],
                  claimed_name: str | None = None) -> dict:
-    """
-    Compare voice in audio_path against enrolled voice embeddings.
-    If claimed_name is given, only compares against that user (faster).
-    Returns:
-        { verified, name, similarity, threshold }
-    """
     best = {"verified": False, "name": None,
             "similarity": 0.0, "threshold": VOICE_SIM_THRESHOLD}
 
     try:
-        wav        = preprocess_wav(Path(audio_path))
-        live_emb   = encoder.embed_utterance(wav)
+        wav      = preprocess_wav(Path(audio_path))
+        live_emb = encoder.embed_utterance(wav)
     except Exception as e:
         print(f"  [voice] Failed to embed audio: {e}")
         return best
@@ -120,20 +99,14 @@ def verify_voice(audio_path: str, enrollments: list[dict],
     return best
 
 
-# ── Combined verification ─────────────────────────────────────────────────────
 def verify(live_frame, audio_path: str, enrollments: list[dict],
            claimed_name: str | None = None) -> dict:
-    """
-    Run both face and voice checks. Both must pass for access.
-    Returns a unified result dict.
-    """
     face_result  = verify_face(live_frame, enrollments)
     voice_result = verify_voice(audio_path, enrollments, claimed_name)
 
-    # Require both factors to agree on the same identity
-    names_match  = (face_result["name"] is not None and
-                    voice_result["name"] is not None and
-                    face_result["name"].lower() == voice_result["name"].lower())
+    names_match = (face_result["name"] is not None and
+                   voice_result["name"] is not None and
+                   face_result["name"].lower() == voice_result["name"].lower())
 
     granted = face_result["verified"] and voice_result["verified"] and names_match
 
@@ -162,13 +135,10 @@ def _build_reason(face: dict, voice: dict, names_match: bool) -> str:
         parts.append(f"face matched {face['name']} (dist {face['distance']:.3f})")
     else:
         parts.append(f"face rejected (dist {face['distance']:.3f} > {face['threshold']})")
-
     if voice["verified"]:
         parts.append(f"voice matched {voice['name']} (sim {voice['similarity']:.3f})")
     else:
         parts.append(f"voice rejected (sim {voice['similarity']:.3f} < {voice['threshold']})")
-
     if not names_match and face["name"] and voice["name"]:
         parts.append(f"identity mismatch: face={face['name']} voice={voice['name']}")
-
     return " | ".join(parts)

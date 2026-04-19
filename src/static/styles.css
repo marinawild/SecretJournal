@@ -77,3 +77,13 @@ p {
     border-radius: 10px;
 }
 
+.simple-book {
+    font-size: 80px;
+    display: inline-block;
+    transition: transform 1s ease-out;
+}
+
+/* The class we will add via JS */
+.book-morph {
+    transform: scale(1.5) rotate(360deg);
+}

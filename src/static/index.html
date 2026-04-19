@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Secret Journal Portal</title>
     <link rel="stylesheet" href="/static/styles.css">
 </head>
@@ -23,6 +24,16 @@
             
             <h3 id="status" style="margin-top: 20px;"></h3>
         </div>
+        <div id="book-animation" style="display:none; text-align: center; margin: 20px auto;">
+        <div class="simple-book">
+            <div class="simple-cover">&#128214;</div>
+        </div>
+        <p style="margin-top: 20px; font-style: italic; color: var(--accent-color);">
+            Unlocking your thoughts...
+        </p>
+    </div>
+        <audio id="verifying-sound" src="/static/verifying.mp3" loop preload="auto"></audio>
+        <audio id="success-sound" src="/static/magic.mp3" preload="auto"></audio>
     </div>
 
     <canvas id="canvas" style="display:none;"></canvas>

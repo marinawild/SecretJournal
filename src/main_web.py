@@ -9,6 +9,8 @@ import requests
 import serial
 import threading
 import asyncio
+import uuid
+import time
 
 from recognizer import verify, load_enrollments
 from config import ENROLLMENT_DIR
@@ -17,9 +19,13 @@ app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-SERIAL_PORT = "COM6" 
+SERIAL_PORT = "COM7" 
 ser = None
 hardware_available = False
+
+# Holds a reference to the FastAPI event loop so the background
+# thread can safely schedule coroutines onto it.
+main_event_loop: asyncio.AbstractEventLoop | None = None
 
 try:
     ser = serial.Serial(SERIAL_PORT, 115200, timeout=0.1)
@@ -27,6 +33,16 @@ try:
     print(f"✅ Arduino connected on {SERIAL_PORT}")
 except Exception as e:
     print(f"⚠️ Arduino NOT detected. Simulation Mode active. (Error: {e})")
+
+
+@app.on_event("startup")
+async def capture_event_loop():
+    """Capture the running event loop at startup so the Arduino thread can use it."""
+    global main_event_loop
+    main_event_loop = asyncio.get_running_loop()
+    if hardware_available:
+        threading.Thread(target=listen_to_arduino, daemon=True).start()
+
 
 @app.get("/", response_class=HTMLResponse)
 async def portal():
@@ -45,8 +61,9 @@ async def journal_page():
     with open("static/journal.html") as f:
         return f.read()
 
+
 # --- WEBSOCKET & ARDUINO LISTENER ---
-active_connections = []
+active_connections: list[WebSocket] = []
 
 @app.websocket("/ws/button")
 async def websocket_endpoint(websocket: WebSocket):
@@ -56,33 +73,54 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             await websocket.receive_text() 
     except WebSocketDisconnect:
-        active_connections.remove(websocket)
+        if websocket in active_connections:
+            active_connections.remove(websocket)
+
+
+async def broadcast(message: str):
+    """Send a message to all connected WebSocket clients, removing dead ones."""
+    dead = []
+    for ws in active_connections:
+        try:
+            await ws.send_text(message)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        active_connections.remove(ws)
 
 
 def listen_to_arduino():
-    """Background thread to handle incoming Arduino commands."""
+    """
+    Background thread that reads serial data from the Arduino.
+
+    Uses asyncio.run_coroutine_threadsafe() to safely schedule
+    WebSocket sends onto the FastAPI event loop — the only correct
+    way to call async code from a non-async thread.
+    """
     while hardware_available and ser:
         try:
-            # Read the signal from the Arduino
             line = ser.readline().decode().strip()
-            
+            if not line:
+                continue
+
             if line == "VERIFY":
                 print("🔓 Arduino: Transitioning to Verification")
-                for connection in active_connections:
-                    asyncio.run(connection.send_text("pressed"))
-            
+                if main_event_loop:
+                    asyncio.run_coroutine_threadsafe(
+                        broadcast("pressed"), main_event_loop
+                    )
+
             elif line == "OK LOCKED":
                 print("🔒 Arduino: Returning to Portal")
-                for connection in active_connections:
-                    asyncio.run(connection.send_text("reset_to_portal"))
-                    
+                if main_event_loop:
+                    asyncio.run_coroutine_threadsafe(
+                        broadcast("reset_to_portal"), main_event_loop
+                    )
+
         except Exception as e:
             print(f"Serial read error: {e}")
             break
 
-# Only start thread if hardware exists
-if hardware_available:
-    threading.Thread(target=listen_to_arduino, daemon=True).start()
 
 # --- HARDWARE UNLOCK ---
 @app.post("/unlock-hardware")
@@ -91,6 +129,7 @@ async def unlock_hardware():
         ser.write(b'UNLOCK\n')
         return {"status": "Hardware Unlocked"}
     return {"status": "Simulation: Hardware unlock triggered"}
+
 
 # --- AI GENERATION ---
 @app.get("/generate-prompt")
@@ -107,8 +146,17 @@ async def generate_prompt(name: str = "User"):
     prompt_text = (
         f"The user is {user_info['name']}, a {user_info.get('age', 'student')} "
         f"studying {user_info.get('study_area', 'their passion')}. "
-        f"Their hobby is {user_info.get('hobby', 'creation')}. "
-        f"Today is {day_name}. Generate ONE lighthearted, journal prompt with mental wellness in mind."
+        f"They enjoy {user_info.get('hobby', 'creative activities')} "
+        f"and like {user_info.get('food', 'comfort food')}."
+
+        f"\nToday is {day_name}."
+
+        "\nGenerate ONE lighthearted, meaningful journal prompt for a mental wellness journal. "
+        "The prompt should feel personal and relevant when possible, "
+        "but you do NOT need to mention all or any of the user details explicitly. "
+        "Only use personal details if they naturally fit the prompt."
+
+        "\nThe prompt should be reflective, warm, and suitable for daily journaling."
     )
 
     try:
@@ -118,10 +166,13 @@ async def generate_prompt(name: str = "User"):
             timeout=10
         )
         return {"prompt": response.json()["response"]}
-    except:
+    except Exception:
         return {"prompt": f"How has your {day_name} been so far?"}
 
+
 # --- VERIFICATION LOGIC ---
+import time # Ensure this is imported at the top
+
 @app.post("/verify")
 async def web_verify(
     claimed_name: str = Form(...),
@@ -129,7 +180,9 @@ async def web_verify(
     voice_audio: UploadFile = File(...)
 ):
     enrollments = load_enrollments()
-    face_path, voice_path = "temp_face.jpg", "temp_voice.wav"
+    uid = uuid.uuid4().hex
+    face_path = f"temp_face_{uid}.jpg"
+    voice_path = f"temp_voice_{uid}.wav"
     
     with open(face_path, "wb") as buffer:
         shutil.copyfileobj(face_image.file, buffer)
@@ -138,8 +191,19 @@ async def web_verify(
 
     result = verify(face_path, voice_path, enrollments, claimed_name=claimed_name)
 
-    if result["granted"]:
-        # If user is confirmed, tell Arduino to unlock
-        await unlock_hardware()
+    # --- THE FIX: Delayed Deletion ---
+    def delayed_delete(files):
+        time.sleep(5) # Keep file for 5 seconds for debugging/DeepFace stability
+        for f in files:
+            if os.path.exists(f):
+                os.remove(f)
+
+    threading.Thread(target=delayed_delete, args=([face_path, voice_path],), daemon=True).start()
+
+    if hardware_available and ser:
+        if result["granted"]:
+            ser.write(b"UNLOCK\n")
+        else:
+            ser.write(b"REJECT\n")
 
     return result
