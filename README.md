@@ -44,7 +44,7 @@ The system bridges the physical and digital worlds: a button press on the vault 
 | Tool | Role |
 |---|---|
 | HTML5 / CSS3 | Structure and advanced glassmorphism + animation styling |
-| Vanilla JavaScript | UI logic, MediaRecorder API for audio/video capture |
+| JavaScript | UI logic, MediaRecorder API for audio/video capture |
 | WebSockets (native browser API) | Real-time bidirectional hardware-to-browser communication |
 | MediaSocket API | Browser API that captures audio and video during verification |
 | Web Audio API | Plays sound effects on access granted and during verification |
