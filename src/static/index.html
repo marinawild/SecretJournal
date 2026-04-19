@@ -28,12 +28,16 @@
     <canvas id="canvas" style="display:none;"></canvas>
     <script src="/static/script.js"></script>
     <script>
-        const socket = new WebSocket(`ws://${window.location.host}/ws/button`);
-        
-        socket.onmessage = function(event) {
+        const resetSocket = new WebSocket(`ws://${window.location.host}/ws/button`);
+    
+        resetSocket.onmessage = function(event) {
             if (event.data === "reset_to_portal") {
-                // Instantly return home if the LOCK signal is received
-                window.location.href = "/"; 
+                console.log("🔒 Lock signal received. Returning to portal...");
+                // Stop the camera before leaving to avoid errors
+                if (window.stream) {
+                    window.stream.getTracks().forEach(track => track.stop());
+                }
+                window.location.href = "/"; // Kick back to start
             }
         };
     </script>

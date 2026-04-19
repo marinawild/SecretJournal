@@ -108,7 +108,7 @@ async def generate_prompt(name: str = "User"):
         f"The user is {user_info['name']}, a {user_info.get('age', 'student')} "
         f"studying {user_info.get('study_area', 'their passion')}. "
         f"Their hobby is {user_info.get('hobby', 'creation')}. "
-        f"Today is {day_name}. Generate ONE lighthearted, mindset centered journal prompt."
+        f"Today is {day_name}. Generate ONE lighthearted, journal prompt with mental wellness in mind."
     )
 
     try:
