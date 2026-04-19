@@ -1,0 +1,16 @@
+{
+  "name": "Marina",
+  "age": "3",
+  "gender": "e",
+  "favorite_color": "",
+  "favorite_food": "d",
+  "favorite_sport": "d",
+  "study_area": "d",
+  "hobby": "d",
+  "face_paths": [
+    "C:\\Users\\niniw\\OneDrive\\Desktop\\CitrusHacksProject\\src\\enrollments\\marina\\face_0.jpg",
+    "C:\\Users\\niniw\\OneDrive\\Desktop\\CitrusHacksProject\\src\\enrollments\\marina\\face_1.jpg",
+    "C:\\Users\\niniw\\OneDrive\\Desktop\\CitrusHacksProject\\src\\enrollments\\marina\\face_2.jpg"
+  ],
+  "voice_path": "C:\\Users\\niniw\\OneDrive\\Desktop\\CitrusHacksProject\\src\\enrollments\\marina\\voice_embedding.npy"
+}
