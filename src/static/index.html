@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title><em>Secret Journal Portal</em></title>
+    <title>Secret Journal Portal</title>
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body class ="index-bg">
     <div class="container">
-        <h1>Secret Journal Unlock</h1>
+        <h1>Unlock your Secret Journal!</h1>
         
         <video id="video" width="400" height="300" autoplay muted></video>
 
@@ -27,5 +27,15 @@
 
     <canvas id="canvas" style="display:none;"></canvas>
     <script src="/static/script.js"></script>
+    <script>
+        const socket = new WebSocket(`ws://${window.location.host}/ws/button`);
+        
+        socket.onmessage = function(event) {
+            if (event.data === "reset_to_portal") {
+                // Instantly return home if the LOCK signal is received
+                window.location.href = "/"; 
+            }
+        };
+    </script>
 </body>
 </html>

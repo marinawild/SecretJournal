@@ -3,44 +3,21 @@
 <head>
     <title>Today's Journal Prompt</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            text-align: center; 
-            background: #1a1a1a; 
-            color: white; 
-            padding: 50px; 
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            height: 80vh;
-        }
-        #prompt-container { 
-            background: #2a2a2a; 
-            border-radius: 15px; 
-            padding: 40px; 
-            border-left: 8px solid #00e6e6; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        h1 { color: #00e6e6; margin-bottom: 10px; font-size: 2.5em; }
-        h3 { color: #888; text-transform: uppercase; letter-spacing: 2px; }
-        #gemini-prompt { 
-            font-size: 1.8em; 
-            line-height: 1.6; 
-            font-style: italic;
-            margin-top: 20px;
-        }
-        .instruction { margin-top: 40px; color: #666; font-size: 1.1em; }
-    </style>
 </head>
-<body>
-    <h3>Daily Inspiration</h3>
-    <div id="prompt-container">
-        <p id="gemini-prompt">Generating your personalized prompt...</p>
+<body class="journal-bg">
+    <div class="container">
+        <h1>Daily Inspiration</h1>
+        
+        <h3>Your Personalized Prompt</h3>
+        
+        <div id="prompt-container" style="margin-top: 30px;">
+            <p id="gemini-prompt">Gemma is crafting your reflection...</p>
+        </div>
+        
+        <p class="instruction" style="margin-top: 40px; color: rgba(255,255,255,0.6); font-style: italic;">
+            Please record your thoughts in your physical journal.
+        </p>
     </div>
-    <p class="instruction">Please write your response in your physical journal.</p>
 
     <script>
     async function fetchPrompt() {
@@ -50,12 +27,19 @@
         try {
             const resp = await fetch(`/generate-prompt?name=${encodeURIComponent(userName)}`);
             const data = await resp.json();
+            
             document.getElementById('gemini-prompt').innerText = data.prompt;
         } catch (err) {
-            document.getElementById('gemini-prompt').innerText = "Could not load prompt. Take a moment to reflect on your day.";
+            document.getElementById('gemini-prompt').innerText = "Take a moment to reflect on your journey today.";
         }
     }
     fetchPrompt();
+    const socket = new WebSocket(`ws://${window.location.host}/ws/button`);
+    socket.onmessage = function(event) {
+        if (event.data === "reset_to_portal") {
+            window.location.href = "/"; // Instantly return home
+        }
+    };
     </script>
 </body>
 </html>

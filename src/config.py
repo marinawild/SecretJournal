@@ -17,7 +17,7 @@ VERIFY_AUDIO_SECS      = 4
 FACE_DISTANCE_THRESHOLD  = 0.40
 
 # Voice: resemblyzer cosine similarity — HIGHER = more similar (0.0–1.0).
-VOICE_SIM_THRESHOLD      = 0.75
+VOICE_SIM_THRESHOLD      = 0.65
 
 # Both must pass for access to be granted (multi-factor).
 

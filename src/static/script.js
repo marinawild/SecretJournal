@@ -80,5 +80,5 @@ async function performCapture(name, stream) {
 };
 
     mediaRecorder.start();
-    setTimeout(() => mediaRecorder.stop(), 4000); // 4s to match config.py
+    setTimeout(() => mediaRecorder.stop(), 4000); 
 }
