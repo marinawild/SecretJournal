@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>The Secret Journal Portal</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .portal-zoom {
+            transform: scale(8) rotate(15deg);
+            opacity: 0;
+            filter: blur(20px);
+            transition: all 1.5s cubic-bezier(0.7, 0, 0.3, 1);
+        }
+        #lock-icon {
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            font-size: 4rem;
+            user-select: none;
+        }
+        #lock-icon:hover {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="index-bg">
+    <div id="portal-container" class="container">
+        <h1>The Vault</h1>
+        <div id="lock-icon">🔒</div>
+        <p id="status-text">Awaiting physical authorization to enter...</p>
+    </div>
+
+    <script>
+    function triggerWarp() {
+        document.getElementById('status-text').innerText = "Access Granted. Entering...";
+        document.getElementById('lock-icon').innerText = "🔓";
+        document.getElementById('portal-container').classList.add('portal-zoom');
+        setTimeout(() => {
+            window.location.href = "/verify-page";
+        }, 1500);
+    }
+
+    // SIMULATION: Press 'S' key
+    document.addEventListener('keydown', (e) => {
+        if (e.key.toLowerCase() === 's') {
+            triggerWarp();
+        }
+    });
+
+    // SIMULATION: Click the lock
+    document.getElementById('lock-icon').onclick = triggerWarp;
+
+    // HARDWARE: Arduino WebSocket
+    const socket = new WebSocket(`ws://${window.location.host}/ws/button`);
+
+    socket.onmessage = function(event) {
+        console.log("Hardware signal:", event.data);
+        if (event.data === "pressed") {
+            triggerWarp();
+        } else if (event.data === "reset_to_portal") {
+            document.getElementById('status-text').innerText = "System Locked. Awaiting authorization...";
+            document.getElementById('lock-icon').innerText = "🔒";
+            document.getElementById('portal-container').classList.remove('portal-zoom');
+            document.getElementById('portal-container').style.opacity = "1";
+        }
+    };
+    </script>
+</body>
+</html>

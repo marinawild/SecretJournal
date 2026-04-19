@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Secret Journal Portal</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class ="index-bg">
+    <div class="container">
+        <h1>Unlock your Secret Journal!</h1>
+        
+        <video id="video" width="400" height="300" autoplay muted></video>
+
+        <div id="ui-container">
+            <h2 id="prompt-text">Identity Verification</h2>
+            <input type="text" id="nameInput" placeholder="Enter Your Enrolled Name">
+            <button id="authBtn">Start Verification</button>
+            
+            <div id="challenge-area" style="display:none; margin-top: 20px;">
+                <h3 style="color: var(--accent-color);">SAY THIS PHRASE:</h3>
+                <p id="phrase-display" style="font-weight: bold;"></p>
+                <h2 id="countdown" style="color: #ff9900;"></h2>
+            </div>
+            
+            <h3 id="status" style="margin-top: 20px;"></h3>
+        </div>
+    </div>
+
+    <canvas id="canvas" style="display:none;"></canvas>
+    <script src="/static/script.js"></script>
+    <script>
+        const resetSocket = new WebSocket(`ws://${window.location.host}/ws/button`);
+    
+        resetSocket.onmessage = function(event) {
+            if (event.data === "reset_to_portal") {
+                console.log("🔒 Lock signal received. Returning to portal...");
+                // Stop the camera before leaving to avoid errors
+                if (window.stream) {
+                    window.stream.getTracks().forEach(track => track.stop());
+                }
+                window.location.href = "/"; // Kick back to start
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+import os
+import json
+import shutil
+import datetime
+from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, JSONResponse
+import requests
+import serial
+import threading
+import asyncio
+
+from recognizer import verify, load_enrollments
+from config import ENROLLMENT_DIR
+
+app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+SERIAL_PORT = "COM3"
+ser = None
+hardware_available = False
+# Holds the running event loop so the Arduino thread can safely
+# schedule WebSocket sends back onto it.
+_event_loop: asyncio.AbstractEventLoop | None = None
+
+try:
+    ser = serial.Serial(SERIAL_PORT, 115200, timeout=0.1)
+    hardware_available = True
+    print(f"✅ Arduino connected on {SERIAL_PORT}")
+except Exception as e:
+    print(f"⚠️ Arduino NOT detected. Simulation Mode active. (Error: {e})")
+
+@app.on_event("startup")
+async def _capture_loop():
+    """Capture the event loop once FastAPI/uvicorn has started it."""
+    global _event_loop
+    _event_loop = asyncio.get_running_loop()
+
+@app.get("/", response_class=HTMLResponse)
+async def portal():
+    with open("static/portal.html") as f:
+        return f.read()
+
+@app.get("/verify-page", response_class=HTMLResponse)
+async def index_page():
+    with open("static/index.html") as f: 
+        return f.read()
+
+@app.get("/journal", response_class=HTMLResponse)
+async def journal_page():
+    with open("static/journal.html") as f:
+        return f.read()
+
+# --- WEBSOCKET & ARDUINO LISTENER ---
+active_connections = []
+
+@app.websocket("/ws/button")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.append(websocket)
+    try:
+        while True:
+            await websocket.receive_text() 
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+
+
+def _broadcast(message: str):
+    """Send a WebSocket message to all connected clients from any thread."""
+    if _event_loop is None:
+        print(f"  [ws] Event loop not ready, cannot send: {message}")
+        return
+    for connection in list(active_connections):
+        asyncio.run_coroutine_threadsafe(connection.send_text(message), _event_loop)
+
+
+def listen_to_arduino():
+    while hardware_available and ser:
+        try:
+            line = ser.readline().decode().strip()
+
+            if line == "VERIFY":
+                print("🔓 Arduino: Transitioning to Verification")
+                _broadcast("pressed")
+
+            elif line == "OK LOCKED":
+                print("🔒 Arduino: Returning to Portal")
+                _broadcast("reset_to_portal")
+
+        except Exception as e:
+            print(f"Serial read error: {e}")
+            break
+
+if hardware_available:
+    threading.Thread(target=listen_to_arduino, daemon=True).start()
+
+# --- HARDWARE UNLOCK ---
+@app.post("/unlock-hardware")
+async def unlock_hardware():
+    if hardware_available and ser:
+        ser.write(b'UNLOCK\n')
+        return {"status": "Hardware Unlocked"}
+    return {"status": "Simulation: Hardware unlock triggered"}
+
+# --- AI GENERATION ---
+@app.get("/generate-prompt")
+async def generate_prompt(name: str = "User"):
+    day_name = datetime.datetime.now().strftime("%A")
+    user_slug = name.lower().replace(" ", "_")
+    meta_path = os.path.join(ENROLLMENT_DIR, user_slug, "meta.json")
+    
+    user_info = {"name": name}
+    if os.path.exists(meta_path):
+        with open(meta_path, "r") as f:
+            user_info = json.load(f)
+    
+    prompt_text = (
+        f"The user is {user_info['name']}, a {user_info.get('age', 'student')} "
+        f"studying {user_info.get('study_area', 'their passion')}. "
+        f"Their hobby is {user_info.get('hobby', 'creation')}. "
+        f"Today is {day_name}. Generate ONE lighthearted, journal prompt with mental wellness in mind."
+    )
+
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={"model": "gemma2:2b", "prompt": prompt_text, "stream": False},
+            timeout=10
+        )
+        return {"prompt": response.json()["response"]}
+    except:
+        return {"prompt": f"How has your {day_name} been so far?"}
+
+# --- VERIFICATION LOGIC ---
+@app.post("/verify")
+async def web_verify(
+    claimed_name: str = Form(...),
+    face_image: UploadFile = File(...),
+    voice_audio: UploadFile = File(...)
+):
+    enrollments = load_enrollments()
+
+    face_path = "temp_face.jpg"
+    voice_path = "temp_voice_raw"
+
+    with open(face_path, "wb") as f:
+        shutil.copyfileobj(face_image.file, f)
+
+    audio_bytes = await voice_audio.read()
+    with open(voice_path, "wb") as f:
+        f.write(audio_bytes)
+
+    if len(audio_bytes) == 0:
+        return {"granted": False, "reason": "No audio data received from browser."}
+
+    result = verify(face_path, voice_path, enrollments, claimed_name=claimed_name)
+
+    # ── Send result to Arduino ────────────────────────────────────────────────
+    if hardware_available and ser:
+        if result["granted"]:
+            ser.write(b"UNLOCK\n")
+            print("🔓 Sent UNLOCK to Arduino")
+        else:
+            ser.write(b"REJECT\n")
+            print("🔒 Sent REJECT to Arduino")
+
+    return result

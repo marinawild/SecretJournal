@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Today's Journal Prompt</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="journal-bg">
+    <div class="container">
+        <h1>Daily Inspiration</h1>
+        
+        <h3>Your Personalized Prompt</h3>
+        
+        <div id="prompt-container" style="margin-top: 30px;">
+            <p id="gemini-prompt">Gemma is crafting your reflection...</p>
+        </div>
+        
+        <p class="instruction" style="margin-top: 40px; color: rgba(255,255,255,0.6); font-style: italic;">
+            Please record your thoughts in your physical journal.
+        </p>
+    </div>
+
+    <script>
+    async function fetchPrompt() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const userName = urlParams.get('name') || "User";
+
+        try {
+            const resp = await fetch(`/generate-prompt?name=${encodeURIComponent(userName)}`);
+            const data = await resp.json();
+            
+            document.getElementById('gemini-prompt').innerText = data.prompt;
+        } catch (err) {
+            document.getElementById('gemini-prompt').innerText = "Take a moment to reflect on your journey today.";
+        }
+    }
+    fetchPrompt();
+    const socket = new WebSocket(`ws://${window.location.host}/ws/button`);
+    socket.onmessage = function(event) {
+        if (event.data === "reset_to_portal") {
+            window.location.href = "/"; // Instantly return home
+        }
+    };
+    </script>
+</body>
+</html>
