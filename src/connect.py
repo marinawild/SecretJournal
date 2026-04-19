@@ -1,7 +1,7 @@
 import serial
 import time
 
-ser = serial.Serial("COM6", 115200, timeout=1)
+ser = serial.Serial("COM3", 115200, timeout=1)
 
 time.sleep(2)
 ser.reset_input_buffer()

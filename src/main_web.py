@@ -17,9 +17,12 @@ app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-SERIAL_PORT = "COM6" 
+SERIAL_PORT = "COM3"
 ser = None
 hardware_available = False
+# Holds the running event loop so the Arduino thread can safely
+# schedule WebSocket sends back onto it.
+_event_loop: asyncio.AbstractEventLoop | None = None
 
 try:
     ser = serial.Serial(SERIAL_PORT, 115200, timeout=0.1)
@@ -28,15 +31,19 @@ try:
 except Exception as e:
     print(f"⚠️ Arduino NOT detected. Simulation Mode active. (Error: {e})")
 
+@app.on_event("startup")
+async def _capture_loop():
+    """Capture the event loop once FastAPI/uvicorn has started it."""
+    global _event_loop
+    _event_loop = asyncio.get_running_loop()
+
 @app.get("/", response_class=HTMLResponse)
 async def portal():
-    """Serves the Vault Entry page (Lock Icon/Simulation)."""
     with open("static/portal.html") as f:
         return f.read()
 
 @app.get("/verify-page", response_class=HTMLResponse)
 async def index_page():
-    """Serves the Biometric page (Video/Name input)."""
     with open("static/index.html") as f: 
         return f.read()
 
@@ -59,28 +66,32 @@ async def websocket_endpoint(websocket: WebSocket):
         active_connections.remove(websocket)
 
 
+def _broadcast(message: str):
+    """Send a WebSocket message to all connected clients from any thread."""
+    if _event_loop is None:
+        print(f"  [ws] Event loop not ready, cannot send: {message}")
+        return
+    for connection in list(active_connections):
+        asyncio.run_coroutine_threadsafe(connection.send_text(message), _event_loop)
+
+
 def listen_to_arduino():
-    """Background thread to handle incoming Arduino commands."""
     while hardware_available and ser:
         try:
-            # Read the signal from the Arduino
             line = ser.readline().decode().strip()
-            
+
             if line == "VERIFY":
                 print("🔓 Arduino: Transitioning to Verification")
-                for connection in active_connections:
-                    asyncio.run(connection.send_text("pressed"))
-            
+                _broadcast("pressed")
+
             elif line == "OK LOCKED":
                 print("🔒 Arduino: Returning to Portal")
-                for connection in active_connections:
-                    asyncio.run(connection.send_text("reset_to_portal"))
-                    
+                _broadcast("reset_to_portal")
+
         except Exception as e:
             print(f"Serial read error: {e}")
             break
 
-# Only start thread if hardware exists
 if hardware_available:
     threading.Thread(target=listen_to_arduino, daemon=True).start()
 
@@ -129,17 +140,29 @@ async def web_verify(
     voice_audio: UploadFile = File(...)
 ):
     enrollments = load_enrollments()
-    face_path, voice_path = "temp_face.jpg", "temp_voice.wav"
-    
-    with open(face_path, "wb") as buffer:
-        shutil.copyfileobj(face_image.file, buffer)
-    with open(voice_path, "wb") as buffer:
-        shutil.copyfileobj(voice_audio.file, buffer)
+
+    face_path = "temp_face.jpg"
+    voice_path = "temp_voice_raw"
+
+    with open(face_path, "wb") as f:
+        shutil.copyfileobj(face_image.file, f)
+
+    audio_bytes = await voice_audio.read()
+    with open(voice_path, "wb") as f:
+        f.write(audio_bytes)
+
+    if len(audio_bytes) == 0:
+        return {"granted": False, "reason": "No audio data received from browser."}
 
     result = verify(face_path, voice_path, enrollments, claimed_name=claimed_name)
 
-    if result["granted"]:
-        # If user is confirmed, tell Arduino to unlock
-        await unlock_hardware()
+    # ── Send result to Arduino ────────────────────────────────────────────────
+    if hardware_available and ser:
+        if result["granted"]:
+            ser.write(b"UNLOCK\n")
+            print("🔓 Sent UNLOCK to Arduino")
+        else:
+            ser.write(b"REJECT\n")
+            print("🔒 Sent REJECT to Arduino")
 
     return result
